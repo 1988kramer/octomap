@@ -50,7 +50,7 @@ namespace octomap {
   public:
     friend class MeanOcTree; // needs access to node children (inherited)
 
-    MeanOcTreeNode() : OcTreeNode() {}
+    MeanOcTreeNode() : OcTreeNode(), mean(0.0), n_observations(0) {}
 
     MeanOcTreeNode(const MeanOcTreeNode& rhs) 
       : OcTreeNode(rhs), mean(rhs.mean), n_observations(rhs.n_observations) {}
@@ -83,6 +83,7 @@ namespace octomap {
     void updateLogOdds(); // updates log-odds occupancy based on mean intensity
 
     double getAverageChildMean() const;
+    long getSumChildObservations() const;
   
     // file I/O
     std::istream& readData(std::istream &s);
@@ -126,6 +127,8 @@ namespace octomap {
     MeanOcTreeNode* setNodeMean(const OcTreeKey& key, double m, long n);
     MeanOcTreeNode* setNodeObservations(const OcTreeKey& key, long n);
     MeanOcTreeNode* addObservation(const OcTreeKey& key, double i);
+    MeanOcTreeNode* updateNodeRecurs(MeanOcTreeNode* node, bool node_just_created,
+                                     const OcTreeKey& key, unsigned int depth, double i);
 
 
     MeanOcTreeNode* setNodeMean(float x, float y, 

@@ -56,7 +56,8 @@ namespace octomap {
   void MeanOcTreeNode::addObservation(double i)
   {
     mean = ((mean * n_observations) + i);
-    mean /= ++n_observations;
+    n_observations++;
+    mean /= n_observations;
   }
 
   double MeanOcTreeNode::getAverageChildMean() const {
@@ -68,7 +69,7 @@ namespace octomap {
         MeanOcTreeNode* child = static_cast<MeanOcTreeNode*>(children[i]);
 
         if (child != NULL && child->isObserved()) {
-          sum_means += child->getMean();
+          sum_means += child->getMean() * child->getObservations();
           sum_observations += child->getObservations();
         }
       }
@@ -82,9 +83,28 @@ namespace octomap {
     }
   }
 
+  long MeanOcTreeNode::getSumChildObservations() const
+  {
+    long sum_observations = 0;
+    if (children != NULL)
+    {
+      for (int i = 0; i < 8; i ++)
+      {
+        MeanOcTreeNode* child = static_cast<MeanOcTreeNode*>(children[i]);
+
+        if (child != NULL && child->isObserved())
+        {
+          sum_observations += child->getObservations();
+        }
+      }
+    }
+    return sum_observations;
+  }
+
 
   void MeanOcTreeNode::updateMeanChildren() {
     mean = getAverageChildMean();
+    n_observations= getSumChildObservations();
   }
 
 
@@ -133,12 +153,57 @@ namespace octomap {
 
   MeanOcTreeNode* MeanOcTree::addObservation(const OcTreeKey& key, double i)
   {
-    MeanOcTreeNode* node = search (key);
-    if (node != 0)
+    bool createdRoot = false;
+    if (this->root == NULL)
+    {
+      this->root = new MeanOcTreeNode();
+      this->tree_size++;
+      createdRoot = true;
+    }
+
+    return updateNodeRecurs(this->root, createdRoot, key, 0, i);
+  }
+
+  MeanOcTreeNode* MeanOcTree::updateNodeRecurs(MeanOcTreeNode* node, bool node_just_created,
+                                               const OcTreeKey& key, unsigned int depth, double i)
+  {
+    bool created_node = false;
+
+    assert(node);
+
+    if (depth < this->tree_depth) 
+    {
+      unsigned int pos = computeChildIdx(key, this->tree_depth - 1 - depth);
+      if (!this->nodeChildExists(node, pos))
+      {
+        if (!this->nodeHasChildren(node) && !node_just_created)
+        {
+          this->expandNode(node);
+        }
+        else
+        {
+          this->createNodeChild(node, pos);
+          created_node = true;
+        }
+      }
+
+      MeanOcTreeNode* retval = updateNodeRecurs(this->getNodeChild(node,pos), created_node, key, depth+1, i);
+
+      if (this->pruneNode(node))
+      {
+        retval = node;
+      }
+      else
+      {
+        node->updateMeanChildren();
+      }
+      return retval;
+    }
+    else
     {
       node->addObservation(i);
+      return node;
     }
-    return node;
   }
 
   bool MeanOcTree::pruneNode(MeanOcTreeNode* node) {
@@ -148,8 +213,11 @@ namespace octomap {
     // set value to children's values (all assumed equal)
     node->copyData(*(getNodeChild(node, 0)));
 
-    if (node->isObserved()) // TODO: Unsure how to handle n_observations here
+    if (node->isObserved()) 
+    {
       node->setMean(node->getAverageChildMean());
+      node->setObservations(node->getSumChildObservations());
+    }
 
     // delete children
     for (unsigned int i=0;i<8;i++) {
@@ -176,7 +244,7 @@ namespace octomap {
       // compare nodes only using their occupancy, ignoring color for pruning
       if (!nodeChildExists(node, i) 
           || nodeHasChildren(getNodeChild(node, i)) 
-          || !(getNodeChild(node, i)->getValue() == firstChild->getValue()))
+          || !(getNodeChild(node, i)->getMean() == firstChild->getMean()))
         return false;
     }
 
