@@ -163,6 +163,15 @@ namespace octomap {
     {
       return node.getMean() >= this->intensity_threshold_;
     }
+
+    inline bool isNodeOccupied(const OcTreeNode* node) const
+    {
+      const MeanOcTreeNode* mean_node = reinterpret_cast<const MeanOcTreeNode*>(node);
+      if (mean_node != NULL)
+        return isNodeOccupied(*mean_node);
+      else
+        return false;
+    }
     
   protected:
 
